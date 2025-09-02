@@ -6,3 +6,11 @@ venv/
 /data/raw/*
 /data/warehouse/*
 .DS_Store
+
+# Ignore saved model files
+models/*.pkl
+models/*.joblib
+models/*.npz
+
+# Keep the placeholder
+!models/.gitkeep
