@@ -14,3 +14,6 @@ models/*.npz
 
 # Keep the placeholder
 !models/.gitkeep
+
+# Streamlit secrets
+.streamlit/secrets.toml

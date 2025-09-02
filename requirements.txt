@@ -4,3 +4,5 @@ scikit-learn
 SQLAlchemy
 psycopg2-binary
 python-dotenv
+streamlit
+altair

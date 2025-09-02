@@ -12,6 +12,7 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
 ```
 .
 ├── app
+│   └── app.py
 ├── data
 │   └── raw
 │       ├── merchants.csv
@@ -21,7 +22,8 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
 ├── README.md
 ├── requirements.txt
 ├── sql
-│   └── create_schema.sql
+│   ├── create_schema.sql
+│   └── create_views.sql
 └── src
     ├── data
     │   └── fetch.py
@@ -47,6 +49,9 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
   - `vehicles` — vehicle metadata  
   - `merchants` — merchant metadata  
   - `transactions` — individual transactions linked to vehicles and merchants  
+
+- **Views** (`sql/create_views.sql`)
+  Defines helper views like v_txn_for_dashboard used by both modeling and dashboard.
 
 - **Data Generation** (`src/generate.py`)  
   Produces synthetic CSVs: `data/raw/vehicles.csv`, `merchants.csv`, `transactions.csv`.
@@ -88,6 +93,10 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
 - **Saved Artifacts (models/)** (`models/`)
   Stores serialized pipelines (e.g., `models/logreg.pkl`). 
   Binaries are gitignored; keep a .gitkeep to show the folder.
+
+- **Dashboard App** (`app/app.py`) 
+  Streamlit dashboard for interactive fraud monitoring (filters, charts, fraud table).
+
 ---
 
 ## Prerequisites
@@ -95,7 +104,11 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
 - Postgres running locally (or via Docker)  
 - Environment file `.env` containing:
 ```dotenv
-DATABASE_URL=postgresql://user:password@localhost:5432/vehicledb
+DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/vehicledb
+```
+- Streamlit secrets file `.streamlit/secrets.toml` containing:
+```toml
+DATABASE_URL = "postgresql+psycopg2://user:password@localhost:5432/vehicledb"
 ```
 - Install dependencies:
 ```bash
@@ -125,6 +138,12 @@ python -m src.train --model logreg --test-size 0.25 --threshold 0.5 --save model
 # Or use the from-scratch Logistic Regression
 python -m src.train --model logreg_scratch --test-size 0.25 --threshold 0.5 --save models/scratch_logreg.pkl
 ```
+5.  **Streamlit app**
+```bash
+streamlit run app/app.py
+```
+
+---
 
 ## Next Steps
 - **Modeling**
@@ -139,11 +158,13 @@ python -m src.train --model logreg_scratch --test-size 0.25 --threshold 0.5 --sa
   - Prepare for containerization with Docker.
 
 - **Presentation**
-  - Build a Streamlit dashboard:
+  - Extend Streamlit dashboard:
     - Show recent scored transactions.
     - Plot live fraud metrics (ROC/PR, precision/recall at threshold).
     - Add threshold slider for what-if analysis.
   - Deploy the dashboard (Streamlit Cloud, Render, or similar) to share via a public link.
+
+---
 
 ## Notes
 - **All data is synthetic** and generated locally.

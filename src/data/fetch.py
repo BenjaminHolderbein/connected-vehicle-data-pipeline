@@ -29,11 +29,8 @@ def get_engine() -> Engine:
 
 
 _SQL = text("""
-    SELECT t.txn_id, t.amount, t.channel, t.is_fraud, t.txn_ts, t.latitude AS t_lat, t.longitude AS t_lon,
-           m.category, m.latitude as m_lat, m.longitude as m_lon, 
-           EXTRACT (HOUR FROM t.txn_ts) AS hour, EXTRACT (DOW FROM t.txn_ts) AS dow
-    FROM vehicle.transactions t
-    JOIN vehicle.merchants m USING (merchant_id)
+    SELECT *
+    FROM vehicle.v_txn_for_dashboard
 """)
 
 
