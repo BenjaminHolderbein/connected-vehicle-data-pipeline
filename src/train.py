@@ -88,10 +88,30 @@ def main():
     print("\nClassification report @ threshold")
     print(m["report"])
 
-    # Save
+    # Save (export a plain sklearn pipeline for portable inference)
     if args.save:
-        joblib.dump(pipe, args.save)
-        print(f"Saved pipeline -> {args.save}")
+        from sklearn.linear_model import LogisticRegression
+
+        if args.model == "logreg_scratch":
+            # Refit a plain sklearn LR on the same training data for a portable artifact
+            plain_pipe = Pipeline([
+                ("pre", pipe.named_steps["pre"]),                 # reuse the fitted preprocessor
+                ("clf", LogisticRegression(                       # plain, importable estimator
+                    max_iter=1000,
+                    class_weight="balanced",
+                    random_state=args.seed,
+                )),
+            ])
+            plain_pipe.fit(X_train, y_train)                      # quick refit for portability
+        else:
+            # Wrapped sklearn model: unwrap to the underlying sklearn estimator
+            plain_pipe = Pipeline([
+                ("pre", pipe.named_steps["pre"]),
+                ("clf", pipe.named_steps["clf"].clf),
+            ])
+
+        joblib.dump(plain_pipe, args.save)
+        print(f"Saved plain sklearn pipeline -> {args.save}")
 
 
 if __name__ == "__main__":

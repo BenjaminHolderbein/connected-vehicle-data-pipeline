@@ -1,8 +1,8 @@
 """
 Connected Vehicle Dashboard (Streamlit).
 
-Reads aggregated/safe transaction features from Postgres (stable view),
-shows KPIs, a daily spend histogram, and a table of labeled frauds.
+Loads features from Postgres, applies filters, scores with a trained model,
+and shows KPIs, a daily spend chart, and a table of flagged transactions.
 
 Requirements:
 - .streamlit/secrets.toml with:
@@ -12,16 +12,19 @@ Requirements:
 """
 
 # -- Imports --
+from typing import Any
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 import altair as alt
+import joblib
 
 # -- Function Definitions --
 
 
 @st.cache_resource
-def get_engine():
+def get_engine() -> Engine:
     """
     Create (and cache) a single SQLAlchemy engine for the Streamlit process.
 
@@ -32,8 +35,14 @@ def get_engine():
     return create_engine(url, pool_pre_ping=True)
 
 
+@st.cache_resource
+def load_pipeline(path: str = "models/logreg.pkl") -> Any:
+    """Load and cache a joblib-saved inference pipeline."""
+    return joblib.load(path)
+
+
 @st.cache_data(ttl=60)  # re-query at most once per minute
-def fetch_df(sql: str, params: dict | None = None) -> pd.DataFrame:
+def fetch_df(sql: str, params: dict[str, Any] | None = None) -> pd.DataFrame:
     """
     Execute a SQL query and return a DataFrame. Cached briefly for responsiveness.
 
@@ -49,7 +58,7 @@ def fetch_df(sql: str, params: dict | None = None) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300)
-def fetch_distincts():
+def fetch_distincts() -> tuple[list[str], list[str]]:
     """
     Get distinct category/channel values for sidebar filters.
 
@@ -68,8 +77,7 @@ SELECT
   txn_id, txn_ts, vehicle_id, merchant_id, merchant_name,
   category, channel, amount,
   t_lat, t_lon, m_lat, m_lon,
-  hour, dow, log_amount, geo_delta,
-  is_fraud
+  hour, dow, log_amount, geo_delta
 FROM vehicle.v_txn_for_dashboard
 WHERE 1=1
   -- optional filters:
@@ -80,7 +88,7 @@ LIMIT :limit
 """
 
 
-def load_transactions(category: str | None, channel: str | None, limit: int = 2000):
+def load_transactions(category: str | None, channel: str | None, limit: int = 2000) -> pd.DataFrame:
     """
     Load filtered transactions from the stable dashboard view.
 
@@ -127,10 +135,20 @@ if df.empty:
     st.warning("No transactions found for the selected filters.")
     st.stop()
 
+# Score with model -> probabilities + binary flags
+model = load_pipeline()
+
+proba = model.predict_proba(df)
+# handle both shapes just in case
+proba_1d = proba[:, 1] if getattr(proba, "ndim", 1) == 2 else proba
+
+df["proba"] = pd.Series(proba_1d, index=df.index)
+df["pred"]  = (df["proba"] >= th).astype(int)
+
 # Top-level KPIs
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Rows", f"{len(df):,}")
-col2.metric("Fraud rate (label)", f"{100*df['is_fraud'].mean():.2f}%")
+col2.metric("Flag rate (pred)", f"{100 * df['pred'].mean():.2f}%")
 col3.metric("Categories", df["category"].nunique())
 col4.metric("Channels", df["channel"].nunique())
 
@@ -142,7 +160,7 @@ daily = (
     .rename(columns={"_date": "date", "amount": "amount_spent"})
 )
 
-# Fraudulent transactions (labeled)
+# -- Spending Histogram --
 st.subheader("Amount Spent per Day")
 if daily.empty:
     st.info("No data for the selected filters.")
@@ -160,15 +178,15 @@ else:
     st.altair_chart(chart, use_container_width=True)
 
 # -- Fraudulent Transactions (List) --
-st.subheader("Fraudulent Transactions (labeled)")
-fraud_cols = ["txn_ts", "txn_id", "merchant_name",
-              "category", "channel", "amount", "is_fraud"]
-fraud_df = (
-    df.loc[df["is_fraud"] == True, fraud_cols]
-      .sort_values("txn_ts", ascending=False)
+st.subheader("Flagged Transactions (by model probability)")
+flagged_cols = ["txn_ts", "txn_id", "merchant_name",
+                "category", "channel", "amount", "proba"]
+flagged = (
+    df.loc[df["pred"] == 1, flagged_cols]
+      .sort_values(["proba", "txn_ts"], ascending=[False, False])
 )
-
-if fraud_df.empty:
-    st.info("No labeled fraudulent transactions for the current filters.")
+st.caption(f"Threshold = {th:.2f}")
+if flagged.empty:
+    st.info("No transactions exceed the current threshold.")
 else:
-    st.dataframe(fraud_df.head(500), use_container_width=True)
+    st.dataframe(flagged.head(500), use_container_width=True)
