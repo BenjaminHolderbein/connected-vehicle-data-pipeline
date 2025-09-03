@@ -8,6 +8,12 @@ The pipeline is **batch-oriented** for now but is designed to be extended to sup
 
 ---
 
+## Live Dashboard
+You can explore the interactive fraud monitoring dashboard here:  
+👉 [https://connected-vehicle-data-pipeline.streamlit.app/](https://connected-vehicle-data-pipeline.streamlit.app/)
+
+---
+
 ## Project Structure
 ```
 .
